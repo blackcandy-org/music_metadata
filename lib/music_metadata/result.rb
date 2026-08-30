@@ -11,7 +11,7 @@ module MusicMetadata
       @confidence = confidence
       @match_method = match_method
       @candidates = candidates.freeze
-      @warnings = warnings.freeze
+      @warnings = deep_freeze(warnings)
       @minimum_confidence = minimum_confidence
       @ambiguity_window = ambiguity_window
       freeze

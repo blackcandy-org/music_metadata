@@ -11,17 +11,17 @@ class AcoustIDTest < Minitest::Test
           {
             id: "acoustid-low",
             score: 0.72,
-            recordings: [ { id: "recording-1", title: "Song", artists: [ { name: "Artist" } ] } ]
+            recordings: [{id: "recording-1", title: "Song", artists: [{name: "Artist"}]}]
           },
           {
             id: "acoustid-high",
             score: 0.97,
-            recordings: [ { id: "recording-1", title: "Song", artists: [ { name: "Artist" } ] } ]
+            recordings: [{id: "recording-1", title: "Song", artists: [{name: "Artist"}]}]
           },
           {
             id: "acoustid-second",
             score: 0.91,
-            recordings: [ { id: "recording-2", title: "Other", artists: [] } ]
+            recordings: [{id: "recording-2", title: "Other", artists: []}]
           }
         ]
       }
@@ -30,18 +30,22 @@ class AcoustIDTest < Minitest::Test
 
     candidates = provider.lookup(MusicMetadata::Fingerprint.new(duration: 200, value: "abc"))
 
-    assert_equal [ "recording-1", "recording-2" ], candidates.map(&:recording_id)
+    assert_equal ["recording-1", "recording-2"], candidates.map(&:recording_id)
     assert_in_delta 0.97, candidates.first.score
     assert_equal "acoustid-high", candidates.first.acoustid
+    assert_equal :post, http.requests.first[:method]
     assert_equal "key", http.requests.first[:params][:client]
     assert_equal "recordings releasegroups releases compress", http.requests.first[:params][:meta]
+    assert candidates.first.recording_id.frozen?
+    assert candidates.first.title.frozen?
+    assert candidates.first.artists.first.frozen?
   end
 
   def test_raises_when_acoustid_reports_an_error
     http = FakeHttp.new(
       MusicMetadata::Providers::AcoustID::ENDPOINT => {
         status: "error",
-        error: { message: "invalid key" }
+        error: {message: "invalid key"}
       }
     )
 

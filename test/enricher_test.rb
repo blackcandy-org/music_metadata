@@ -16,8 +16,15 @@ class EnricherTest < Minitest::Test
   end
 
   FakeMusicBrainz = Struct.new(:response) do
-    def recording(_recording_id, album_hint: nil)
-      response.merge(album_hint_received: album_hint)
+    attr_reader :request
+
+    def recording(recording_id, album_hint: nil, release_id_hint: nil)
+      @request = {
+        recording_id: recording_id,
+        album_hint: album_hint,
+        release_id_hint: release_id_hint
+      }
+      response
     end
   end
 
@@ -36,14 +43,14 @@ class EnricherTest < Minitest::Test
   def test_enriches_and_tracks_field_provenance
     candidate = candidate(score: 0.97)
     enricher = build_enricher(
-      candidates: [ candidate ],
+      candidates: [candidate],
       recording: recording,
-      artwork: { url: "https://images.example/cover.jpg", source: :cover_art_archive }
+      artwork: {url: "https://images.example/cover.jpg", source: :cover_art_archive}
     )
 
     result = enricher.call(
       file_path: "ignored.mp3",
-      metadata: { name: "Old Title", artist_name: "Old Artist", album_name: "The Album", genre: "Old Genre" }
+      metadata: {name: "Old Title", artist_name: "Old Artist", album_name: "The Album", genre: "Old Genre"}
     )
 
     assert result.acceptable?
@@ -58,7 +65,7 @@ class EnricherTest < Minitest::Test
 
   def test_marks_close_top_candidates_as_ambiguous
     result = build_enricher(
-      candidates: [ candidate(score: 0.90), candidate(id: "recording-2", score: 0.88) ],
+      candidates: [candidate(score: 0.90), candidate(id: "recording-2", score: 0.88)],
       recording: recording,
       artwork: nil
     ).call(file_path: "ignored.mp3")
@@ -69,7 +76,7 @@ class EnricherTest < Minitest::Test
 
   def test_returns_embedded_metadata_when_no_match_exists
     result = build_enricher(candidates: [], recording: recording, artwork: nil)
-      .call(file_path: "ignored.mp3", metadata: { title: "Keep Me" })
+      .call(file_path: "ignored.mp3", metadata: {title: "Keep Me"})
 
     refute result.matched?
     assert_equal "Keep Me", result.value(:title)
@@ -80,11 +87,49 @@ class EnricherTest < Minitest::Test
     @configuration.acoustid_api_key = nil
     result = build_enricher(candidates: [], recording: recording, artwork: nil).call(
       file_path: "ignored.mp3",
-      metadata: { musicbrainz_recording_id: "recording-1" }
+      metadata: {musicbrainz_recording_id: "recording-1"}
     )
 
     assert result.acceptable?
     assert_equal :embedded_identifier, result.match_method
+  end
+
+  def test_passes_release_identifier_as_a_strong_hint
+    musicbrainz = FakeMusicBrainz.new(recording)
+    enricher = MusicMetadata::Enricher.new(
+      configuration: @configuration,
+      http: FakeHttp.new,
+      fingerprinter: FakeFingerprinter.new(MusicMetadata::Fingerprint.new(duration: 200, value: "abc")),
+      acoustid: FakeAcoustID.new([candidate(score: 0.99)]),
+      musicbrainz: musicbrainz,
+      cover_art: FakeCoverArt.new(nil)
+    )
+
+    enricher.call(
+      file_path: "ignored.mp3",
+      metadata: {album: "The Album", musicbrainz_release_id: "release-hint"}
+    )
+
+    assert_equal "The Album", musicbrainz.request[:album_hint]
+    assert_equal "release-hint", musicbrainz.request[:release_id_hint]
+  end
+
+  def test_keeps_metadata_when_artwork_provider_fails
+    failing_artwork = Object.new
+    failing_artwork.define_singleton_method(:front) do |_release_id|
+      raise MusicMetadata::ProviderError, "unavailable"
+    end
+    result = MusicMetadata::Enricher.new(
+      configuration: @configuration,
+      http: FakeHttp.new,
+      fingerprinter: FakeFingerprinter.new(MusicMetadata::Fingerprint.new(duration: 200, value: "abc")),
+      acoustid: FakeAcoustID.new([candidate(score: 0.99)]),
+      musicbrainz: FakeMusicBrainz.new(recording),
+      cover_art: failing_artwork
+    ).call(file_path: "ignored.mp3")
+
+    assert result.acceptable?
+    assert_equal ["Artwork lookup failed: unavailable"], result.warnings
   end
 
   private
@@ -100,12 +145,12 @@ class EnricherTest < Minitest::Test
     )
   end
 
-  def candidate(id: "recording-1", score:)
+  def candidate(score:, id: "recording-1")
     MusicMetadata::Candidate.new(
       recording_id: id,
       score: score,
       title: "Candidate Title",
-      artists: [ "Candidate Artist" ],
+      artists: ["Candidate Artist"],
       acoustid: "acoustid-1"
     )
   end
@@ -114,10 +159,10 @@ class EnricherTest < Minitest::Test
     {
       musicbrainz_recording_id: "recording-1",
       title: "Canonical Title",
-      artists: [ "Canonical Artist" ],
+      artists: ["Canonical Artist"],
       artist_credit: "Canonical Artist",
-      isrcs: [ "USABC1234567" ],
-      genres: [ "Indie Rock" ],
+      isrcs: ["USABC1234567"],
+      genres: ["Indie Rock"],
       release: {
         musicbrainz_release_id: "release-1",
         title: "The Album",

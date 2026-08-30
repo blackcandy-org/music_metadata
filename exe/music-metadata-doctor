@@ -19,14 +19,17 @@ healthy = report[:acoustid_api_key_configured] && report[:user_agent_configured]
 
 if file_path
   begin
-    fingerprint = MusicMetadata::Fingerprinter.new(executable: configuration.fpcalc_path).call(file_path)
+    fingerprint = MusicMetadata::Fingerprinter.new(
+      executable: configuration.fpcalc_path,
+      timeout: configuration.fingerprint_timeout
+    ).call(file_path)
     report[:fingerprint] = {
       ok: true,
       duration: fingerprint.duration,
       encoded_length: fingerprint.value.length
     }
   rescue MusicMetadata::FingerprintError => error
-    report[:fingerprint] = { ok: false, error: error.message }
+    report[:fingerprint] = {ok: false, error: error.message}
     healthy = false
   end
 else

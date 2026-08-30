@@ -9,15 +9,19 @@ module MusicMetadata
         @http = http
       end
 
-      def recording(recording_id, album_hint: nil)
+      def recording(recording_id, album_hint: nil, release_id_hint: nil)
         response = @http.get_json(
           "#{ENDPOINT}/recording/#{recording_id}",
           params: {
             fmt: "json",
-            inc: "artist-credits+releases+isrcs+genres+tags"
+            inc: "artist-credits+releases+release-groups+isrcs+genres+tags"
           }
         )
-        release = select_release(response.fetch(:releases, []), album_hint)
+        release = select_release(
+          response.fetch(:releases, []),
+          album_hint: album_hint,
+          release_id_hint: release_id_hint
+        )
         artist_credit = response.fetch(:"artist-credit", [])
 
         {
@@ -33,15 +37,33 @@ module MusicMetadata
 
       private
 
-      def select_release(releases, album_hint)
+      def select_release(releases, album_hint:, release_id_hint:)
         hint = normalize(album_hint)
-        releases.max_by do |release|
+        releases.min_by do |release|
           score = 0
-          score += 4 if !hint.empty? && normalize(release[:title]) == hint
-          score += 2 if release[:status] == "Official"
-          score += 1 unless release[:date].to_s.empty?
-          score
+          normalized_title = normalize(release[:title])
+          score += 1_000 if release[:id] == release_id_hint
+          score += 100 if !hint.empty? && normalized_title == hint
+          score += 40 if !hint.empty? && fuzzy_title_match?(normalized_title, hint)
+          score += 20 if release[:status] == "Official"
+          score += 10 if release.dig(:"release-group", :"primary-type") == "Album"
+          score -= 10 if Array(release.dig(:"release-group", :"secondary-types")).include?("Compilation")
+          score += 5 unless release[:date].to_s.empty?
+          [-score, sortable_date(release[:date]), release[:id].to_s]
         end
+      end
+
+      def fuzzy_title_match?(title, hint)
+        return false if title.empty? || hint.empty?
+
+        title.include?(hint) || hint.include?(title)
+      end
+
+      def sortable_date(date)
+        parts = date.to_s.split("-")
+        return "9999-99-99" if parts.empty? || parts.first.empty?
+
+        [parts[0], parts[1] || "99", parts[2] || "99"].join("-")
       end
 
       def normalize_release(release)

@@ -2,6 +2,21 @@
 
 module MusicMetadata
   class RateLimiter
+    @registry = {}
+    @registry_mutex = Mutex.new
+
+    class << self
+      def shared(key, interval:)
+        @registry_mutex.synchronize do
+          @registry[[key, interval]] ||= new(interval: interval)
+        end
+      end
+
+      def clear_shared!
+        @registry_mutex.synchronize { @registry.clear }
+      end
+    end
+
     def initialize(interval:, clock: Process.method(:clock_gettime), sleeper: Kernel.method(:sleep))
       @interval = interval
       @clock = clock

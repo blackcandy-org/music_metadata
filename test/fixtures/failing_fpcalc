@@ -1,0 +1,4 @@
+#!/usr/bin/env ruby
+
+warn "decoder failed"
+exit 2

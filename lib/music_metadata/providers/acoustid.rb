@@ -11,7 +11,7 @@ module MusicMetadata
       end
 
       def lookup(fingerprint)
-        response = @http.get_json(
+        response = @http.post_form_json(
           ENDPOINT,
           params: {
             client: @api_key,

@@ -1,5 +1,8 @@
 # MusicMetadata
 
+[![Test](https://github.com/blackcandy-org/music_metadata/actions/workflows/test.yml/badge.svg)](https://github.com/blackcandy-org/music_metadata/actions/workflows/test.yml)
+[![Standard Ruby](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://github.com/standardrb/standard)
+
 `MusicMetadata` is a small, stateless Ruby library for identifying an audio
 file and proposing normalized music metadata. It is designed to sit between a
 music application and existing open music services without taking ownership of
@@ -31,6 +34,10 @@ database, interactive matching, or file-management workflow.
 
 On Debian/Ubuntu, `fpcalc` is normally provided by `libchromaprint-tools`. On
 macOS it is available through `brew install chromaprint`.
+
+Supported input formats are determined by the decoders available to the local
+Chromaprint/`fpcalc` installation. Use complete recordings; AcoustID lookup is
+not designed to identify arbitrary short excerpts.
 
 ## Installation
 
@@ -73,6 +80,25 @@ result.source(:artist)   # :musicbrainz or :embedded
 result.candidates        # scored AcoustID/MusicBrainz candidates
 result.to_h              # serializable proposal
 ```
+
+### Runtime configuration
+
+| Setting | Default | Purpose |
+| --- | ---: | --- |
+| `minimum_confidence` | `0.85` | Lowest score eligible for automatic acceptance |
+| `ambiguity_window` | `0.03` | Rejects top candidates that are too close |
+| `request_timeout` | `10` seconds | HTTP open/read timeout |
+| `fingerprint_timeout` | `30` seconds | Maximum `fpcalc` runtime |
+| `max_retries` | `2` | Retries network failures, 429, and transient 5xx responses |
+| `retry_base_interval` | `0.25` seconds | Exponential backoff starting interval |
+| `retry_max_interval` | `30` seconds | Maximum backoff, including `Retry-After` |
+| `musicbrainz_interval` | `1.0` second | MusicBrainz request spacing |
+| `acoustid_interval` | `1/3` second | AcoustID request spacing |
+| `cache_ttl` | `3600` seconds | Successful GET response lifetime |
+
+The default cache is a thread-safe, bounded in-memory LRU cache. Set
+`config.cache = nil` to disable it, or provide an object implementing
+`read(key)` and `write(key, value, ttl:)` to integrate an application cache.
 
 When a trusted embedded MusicBrainz recording ID exists, identification skips
 `fpcalc` and AcoustID:
@@ -124,6 +150,9 @@ Use a full, recognizable recording rather than a generated tone or very short
 fixture. A successful run has `match.acceptable: true` and returns the matched
 MusicBrainz identifiers and Cover Art Archive result. An empty `candidates`
 array means AcoustID accepted the fingerprint but did not know the recording.
+
+Use `--release-id` when the caller already knows the preferred MusicBrainz
+release. It takes precedence over the album-title release heuristic.
 
 To verify MusicBrainz and Cover Art Archive independently of fingerprinting,
 pass a trusted recording MBID:
@@ -185,10 +214,50 @@ Discogs styles and Last.fm genre canonicalization are intentionally deferred
 until the identification and canonical MusicBrainz path has been validated on
 a representative file corpus.
 
+## Operational behavior
+
+- Audio bytes remain local. `fpcalc` derives a compact fingerprint; the gem
+  sends that fingerprint and duration to AcoustID.
+- AcoustID requests use form-encoded POST so long fingerprints do not become
+  oversized or logged URLs.
+- MusicBrainz and Cover Art Archive GET responses are cached; fingerprint
+  lookups are not cached by default.
+- Retries are limited and apply only to network errors, HTTP 429, and transient
+  server failures. Other provider errors fail immediately.
+- Throttlers are shared by all clients within one Ruby process. Applications
+  running multiple processes or hosts should inject an `HttpClient` backed by
+  their shared rate-limiting and caching infrastructure.
+- The free AcoustID and MusicBrainz services have usage and commercial-use
+  policies. Review those policies before operating a commercial or high-volume
+  deployment.
+
+## Security and privacy
+
+Keep `ACOUSTID_API_KEY` in the environment or a secret manager. Do not commit
+keys or pass them in URLs. Although the CLI retains `--acoustid-key` for local
+compatibility, the environment variable is safer because command arguments can
+be visible to other local processes.
+
+Provider error messages intentionally omit query parameters and truncate HTTP
+response bodies. See [SECURITY.md](SECURITY.md) for private vulnerability
+reporting.
+
 ## Development
 
 ```sh
 bundle install
-bundle exec rake test
-gem build music_metadata.gemspec
+bundle exec rake
+bundle exec rake build
 ```
+
+The default task runs tests, enforces at least 90% line coverage, and checks
+Standard Ruby formatting. See [CONTRIBUTING.md](CONTRIBUTING.md) and
+[CHANGELOG.md](CHANGELOG.md).
+
+## Releasing
+
+Releases use RubyGems Trusted Publishing. A maintainer must first configure the
+`blackcandy-org/music_metadata` repository and `.github/workflows/release.yml`
+as a trusted publisher on RubyGems.org. After tests pass and the version and
+changelog are updated, pushing the matching `vX.Y.Z` tag publishes through a
+short-lived OIDC credential; no long-lived RubyGems token is stored in GitHub.

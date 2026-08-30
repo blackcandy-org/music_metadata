@@ -43,7 +43,7 @@ module MusicMetadata
     end
 
     def to_h
-      [ @metadata, @sources ]
+      [@metadata, @sources]
     end
 
     private

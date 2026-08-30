@@ -12,7 +12,7 @@ class CoverArtArchiveTest < Minitest::Test
             front: true,
             approved: true,
             image: "https://images.example/original.jpg",
-            thumbnails: { :"250" => "https://images.example/250.jpg", :"500" => "https://images.example/500.jpg" }
+            thumbnails: {"250": "https://images.example/250.jpg", "500": "https://images.example/500.jpg"}
           }
         ]
       }

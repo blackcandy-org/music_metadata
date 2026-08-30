@@ -6,7 +6,10 @@ module MusicMetadata
       @configuration = configuration
       @configuration.validate_http!
       @http = http || build_http
-      @fingerprinter = fingerprinter || Fingerprinter.new(executable: configuration.fpcalc_path)
+      @fingerprinter = fingerprinter || Fingerprinter.new(
+        executable: configuration.fpcalc_path,
+        timeout: configuration.fingerprint_timeout
+      )
       @acoustid = acoustid
       @musicbrainz = musicbrainz || Providers::MusicBrainz.new(http: @http)
       @cover_art = cover_art || Providers::CoverArtArchive.new(http: @http)
@@ -20,7 +23,8 @@ module MusicMetadata
 
       recording = @musicbrainz.recording(
         candidate.recording_id,
-        album_hint: embedded[:album] || embedded[:album_name]
+        album_hint: embedded[:album] || embedded[:album_name],
+        release_id_hint: embedded[:musicbrainz_release_id]
       )
       merger = MetadataMerger.new(embedded: embedded)
       merger.merge_recording(recording, candidate: candidate)
@@ -58,7 +62,7 @@ module MusicMetadata
           artists: Array(embedded[:artist] || embedded[:artist_name]),
           acoustid: embedded[:acoustid]
         )
-        return [ [ candidate ], :embedded_identifier ]
+        return [[candidate], :embedded_identifier]
       end
 
       @configuration.validate_acoustid!
@@ -67,7 +71,7 @@ module MusicMetadata
         http: @http,
         api_key: @configuration.acoustid_api_key
       )
-      [ provider.lookup(fingerprint), :acoustid ]
+      [provider.lookup(fingerprint), :acoustid]
     end
 
     def unmatched_result(embedded)
@@ -78,18 +82,31 @@ module MusicMetadata
         confidence: nil,
         match_method: nil,
         candidates: [],
-        warnings: [ "No AcoustID match was found" ],
+        warnings: ["No AcoustID match was found"],
         minimum_confidence: @configuration.minimum_confidence,
         ambiguity_window: @configuration.ambiguity_window
       )
     end
 
     def build_http
-      limiter = RateLimiter.new(interval: @configuration.musicbrainz_interval)
       HttpClient.new(
         user_agent: @configuration.user_agent,
         timeout: @configuration.request_timeout,
-        limiters: { "musicbrainz.org" => limiter }
+        limiters: {
+          "musicbrainz.org" => RateLimiter.shared(
+            "musicbrainz.org",
+            interval: @configuration.musicbrainz_interval
+          ),
+          "api.acoustid.org" => RateLimiter.shared(
+            "api.acoustid.org",
+            interval: @configuration.acoustid_interval
+          )
+        },
+        cache: @configuration.cache,
+        cache_ttl: @configuration.cache_ttl,
+        max_retries: @configuration.max_retries,
+        retry_base_interval: @configuration.retry_base_interval,
+        retry_max_interval: @configuration.retry_max_interval
       )
     end
 
