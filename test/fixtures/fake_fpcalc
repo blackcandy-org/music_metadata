@@ -1,0 +1,2 @@
+#!/bin/sh
+printf '%s\n' '{"duration": 201.4, "fingerprint": "AQAD-test-fingerprint"}'

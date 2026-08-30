@@ -1,0 +1,41 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "optparse"
+require "music_metadata"
+
+begin
+  metadata = {}
+  options = {}
+
+  parser = OptionParser.new do |opts|
+    opts.banner = "Usage: music-metadata [options] AUDIO_FILE"
+    opts.on("--artist ARTIST", "Existing artist hint") { |value| metadata[:artist] = value }
+    opts.on("--album ALBUM", "Existing album hint") { |value| metadata[:album] = value }
+    opts.on("--title TITLE", "Existing title hint") { |value| metadata[:title] = value }
+    opts.on("--recording-id MBID", "Known MusicBrainz recording ID") do |value|
+      metadata[:musicbrainz_recording_id] = value
+    end
+    opts.on("--acoustid-key KEY", "AcoustID application API key") { |value| options[:api_key] = value }
+    opts.on("--minimum-confidence SCORE", Float, "Acceptance threshold (default: 0.85)") do |value|
+      options[:minimum_confidence] = value
+    end
+  end
+
+  parser.parse!
+  file_path = ARGV.shift
+  abort(parser.to_s) unless file_path && ARGV.empty?
+
+  MusicMetadata.configure do |config|
+    config.acoustid_api_key = options[:api_key] if options[:api_key]
+    config.minimum_confidence = options[:minimum_confidence] if options[:minimum_confidence]
+  end
+
+  result = MusicMetadata.enrich(file_path: file_path, metadata: metadata)
+  puts JSON.pretty_generate(result.to_h)
+  exit(result.acceptable? ? 0 : 1)
+rescue MusicMetadata::Error => error
+  warn JSON.generate(error: error.message, type: error.class.name)
+  exit 2
+end

@@ -1,0 +1,40 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "music_metadata"
+
+file_path = ARGV.shift
+abort("Usage: music-metadata-doctor [AUDIO_FILE]") unless ARGV.empty?
+
+configuration = MusicMetadata.configuration
+report = {
+  ruby: RUBY_VERSION,
+  gem_version: MusicMetadata::VERSION,
+  fpcalc_path: configuration.fpcalc_path,
+  acoustid_api_key_configured: !configuration.acoustid_api_key.to_s.empty?,
+  user_agent_configured: !configuration.user_agent.to_s.empty?
+}
+healthy = report[:acoustid_api_key_configured] && report[:user_agent_configured]
+
+if file_path
+  begin
+    fingerprint = MusicMetadata::Fingerprinter.new(executable: configuration.fpcalc_path).call(file_path)
+    report[:fingerprint] = {
+      ok: true,
+      duration: fingerprint.duration,
+      encoded_length: fingerprint.value.length
+    }
+  rescue MusicMetadata::FingerprintError => error
+    report[:fingerprint] = { ok: false, error: error.message }
+    healthy = false
+  end
+else
+  report[:fingerprint] = {
+    ok: nil,
+    note: "Pass an audio file to verify fpcalc and audio decoding"
+  }
+end
+
+puts JSON.pretty_generate(report)
+exit(healthy ? 0 : 1)
