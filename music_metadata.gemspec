@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
     AcoustID, enriches matches with MusicBrainz, and finds release artwork in
     the Cover Art Archive.
   DESCRIPTION
-  spec.homepage = "https://github.com/blackcandy-org/blackcandy"
+  spec.homepage = "https://github.com/blackcandy-org/music_metadata"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1"
 

@@ -10,7 +10,7 @@ module MusicMetadata
       @acoustid_api_key = ENV["ACOUSTID_API_KEY"]
       @user_agent = ENV.fetch(
         "MUSIC_METADATA_USER_AGENT",
-        "music_metadata/#{MusicMetadata::VERSION} (https://github.com/blackcandy-org/blackcandy)"
+        "music_metadata/#{MusicMetadata::VERSION} (https://github.com/blackcandy-org/music_metadata)"
       )
       @minimum_confidence = 0.85
       @ambiguity_window = 0.03

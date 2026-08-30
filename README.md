@@ -32,6 +32,20 @@ database, interactive matching, or file-management workflow.
 On Debian/Ubuntu, `fpcalc` is normally provided by `libchromaprint-tools`. On
 macOS it is available through `brew install chromaprint`.
 
+## Installation
+
+Until the first RubyGems release, add the GitHub repository to your Gemfile:
+
+```ruby
+gem "music_metadata", github: "blackcandy-org/music_metadata", branch: "main"
+```
+
+Then run:
+
+```sh
+bundle install
+```
+
 ## Usage
 
 ```ruby
@@ -160,7 +174,7 @@ problems from metadata-provider problems.
 }
 ```
 
-## Black Candy integration boundary
+## Application integration boundary
 
 Black Candy only needs to pass a file path plus the tags it already reads with
 WahWah. A background job can inspect `acceptable?` and apply selected values.
